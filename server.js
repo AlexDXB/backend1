@@ -16,7 +16,6 @@ const connectionConfig = {
     useUnifiedTopology: true
 };
 
-
 // Configure express to read body in HTTP
 server.use( express.urlencoded({ extended: false }) );
 server.use( express.json() );
@@ -194,8 +193,7 @@ server.post(
         );
 
     }
-)
-
+);
 
 server.listen(
     process.env.PORT || 3001,
