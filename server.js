@@ -1,9 +1,56 @@
 // Import the express library
 const express = require('express');
 const mongoose = require('mongoose');
+const expressFormData = require('express-form-data');
+const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
-const ProductsModel = require('./models/ProductsModel.js');
-const UsersModel = require('./models/UsersModel.js');
+const productsRoutes = require('./routes/products');
+const usersRoutes = require('./routes/users');
+const UsersModel = require('./models/UsersModel');
+
+// Import passport for authentication
+const passport = require('passport');
+// Import for JWT strategy
+const JwtStrategy =  require('passport-jwt').Strategy;
+const ExtractJwt = require('passport-jwt').ExtractJwt;
+
+// Referece a secret data for the jsonwebtoken
+const jwtSecret = process.env.JWT_SECRET;
+
+const passportJwtConfig = {
+    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+    secretOrKey: jwtSecret
+}
+
+// This function is what will read the contents (payload) of the jsonwebtoken
+const passportJwt = (passport) => {
+    // Configure passport to use passport-jwt
+    passport.use(
+        new JwtStrategy(
+            passportJwtConfig, 
+            (jwtPayload, done) => {
+
+                // Extract and find the user by their id (contained jwt)
+                UsersModel
+                .findOne({ _id: jwtPayload.id })
+                .then(
+                    // If the document was found
+                    (dbDocument) => {
+                        return done(null, dbDocument);
+                    }
+                )
+                .catch(
+                    // If something went wrong with database search
+                    (err) => {
+                        return done(null, null);
+                    }
+                )
+            }
+        )
+    )
+};
+
+passportJwt(passport);
 
 // express() will return an object with methods for server operations
 const server = express();
@@ -19,6 +66,8 @@ const connectionConfig = {
 // Configure express to read body in HTTP
 server.use( express.urlencoded({ extended: false }) );
 server.use( express.json() );
+// Also tell express to read HTTP form data
+server.use(expressFormData.parse());
 
 mongoose
 .connect(connectionString, connectionConfig) // Promise
@@ -33,8 +82,31 @@ mongoose
     }
 );
 
+
+// Configure for Cloudinary
+cloudinary.config(
+    {
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET
+    }
+)
+
+// Any request that goes to http://www.myapp.com/product/
+server.use(
+    '/product',
+    productsRoutes
+);
+
+// Any request that goes to http://www.myapp.com/user/
+server.use(
+    '/user',
+    usersRoutes
+);
+
 server.get(
     '/',                                // Same as, for example, http://www.myapp.com/
+    passport.authenticate('jwt', {session:false}),
     (req, res) => {
         res.send('<h1>Welcome Home!</h1>');
     }
@@ -64,136 +136,6 @@ server.get(
     }
 );
 
-/*
- * For mongoose methods, see https://mongoosejs.com/docs/api/model.html
- */
-server.post(
-    '/add-product',
-    (req, res) => {
-
-        // 1. Capture data from client (e.g, Postman or Browser)
-        const formData = {
-            "brand": req.body.brand,
-            "model": req.body.model,
-            "price": req.body.price
-        }
-        
-        // 2. Upload the data to MongoDB
-
-        // Instantiating an object for this data specifically
-        const newProductsModel = new ProductsModel(formData);
-
-        newProductsModel
-        .save() //  Promise
-        .then( //resolved...
-            (dbDocument) => {
-                res.send(dbDocument);
-            }
-        )
-        .catch( //rejected...
-            (error) => {
-                res.send(error)
-            }
-        );
-    }
-);
-
-server.post(
-    '/add-user',
-    (req, res) => {
-
-        // 1. Capture data from client (e.g, Postman or Browser)
-        const formData = {
-            "firstName": req.body.firstName,
-            "lastName": req.body.lastName,
-            "email": req.body.email,
-            "password": req.body.password,
-            "contactNumber": req.body.contactNumber,
-            "address": req.body.address
-        }
-
-        // 2. Upload the data to MongoDB
-        const newUsersModel = new UsersModel(formData)
-        
-        newUsersModel
-        .save() // Promise
-        .then( // When promise is resolved...
-            (dbDocument) => {
-                res.send(dbDocument)
-            }
-        )
-        .catch( // When promise is rejected...
-            (error) => {
-                res.send(error)
-            }
-        )
-
-    }
-);
-
-server.post(
-    '/register',
-    (req, res) => {
-        res.json(
-            {
-                data: "123"
-            }
-        )
-    }
-);
-
-server.get(
-    '/product',
-    (req, res) => {
-
-        // Use the Mongo Model for Products to find a product
-        ProductsModel
-        .find(
-            { model: 'iPhone 12'}
-        )
-        // If the item is found in the database...
-        .then(
-            (dbDocument) => {
-                res.send(dbDocument);
-            }
-        )
-        // If the item is NOT found in the database...
-        .catch(
-            (error) => {
-                console.log('mongoose error', error);
-            }
-        );
-    }
-);
-
-server.post(
-    '/update-product',
-    (req, res) => {
-
-        ProductsModel
-        .findOneAndUpdate(
-            { 'model': 'iPhone 12' },
-            {
-                $set: {
-                   'price': 3800 
-                }
-            }
-        )
-         // If the item is found in the database...
-         .then(
-            (dbDocument) => {
-                res.send(dbDocument);
-            }
-        )
-        // If the item is NOT found in the database...
-        .catch(
-            (error) => {
-                console.log('mongoose error', error);
-            }
-        );
-
-    }
-);
 
 server.listen(
     process.env.PORT || 3001,
