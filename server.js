@@ -1,5 +1,6 @@
 // Import the express library
 const express = require('express');
+const cors = require('cors');
 const mongoose = require('mongoose');
 const expressFormData = require('express-form-data');
 const cloudinary = require('cloudinary').v2;
@@ -69,6 +70,12 @@ server.use( express.json() );
 // Also tell express to read HTTP form data
 server.use(expressFormData.parse());
 
+// Allow Cross-Origin Resource Sharing
+server.use(cors());
+
+
+
+
 mongoose
 .connect(connectionString, connectionConfig) // Promise
 .then( // When resolved...
@@ -105,7 +112,7 @@ server.use(
 );
 
 server.get(
-    '/',                                // Same as, for example, http://www.myapp.com/
+    '/profile',                                // Same as, for example, http://www.myapp.com/
     passport.authenticate('jwt', {session:false}),
     (req, res) => {
         res.send('<h1>Welcome Home!</h1>');
